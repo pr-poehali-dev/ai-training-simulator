@@ -75,6 +75,9 @@ def handler(event: dict, context) -> dict:
 
 def parse_google_sheets(url: str) -> List[Dict[str, Any]]:
     """Парсит Google Sheets через публичный CSV экспорт"""
+    import csv
+    from io import StringIO
+    
     sheet_id_match = re.search(r'/d/([a-zA-Z0-9-_]+)', url)
     if not sheet_id_match:
         raise ValueError('Неверная ссылка на Google Sheets')
@@ -83,26 +86,29 @@ def parse_google_sheets(url: str) -> List[Dict[str, Any]]:
     csv_url = f'https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv'
     
     response = requests.get(csv_url, timeout=30)
-    response.raise_for_status()
+    if response.status_code != 200:
+        raise ValueError(f'Ошибка доступа к таблице (код {response.status_code}). Проверьте, что таблица доступна для просмотра по ссылке.')
     
-    lines = response.text.strip().split('\n')
-    if len(lines) < 2:
-        raise ValueError('Таблица пуста')
+    if not response.text or len(response.text) < 10:
+        raise ValueError('Таблица пуста или недоступна. Откройте доступ: Файл → Доступ → Просмотр для всех, у кого есть ссылка')
     
-    headers = [h.strip() for h in lines[0].split(',')]
+    csv_reader = csv.DictReader(StringIO(response.text))
+    rows = list(csv_reader)
+    
+    if not rows:
+        raise ValueError('В таблице нет данных')
     
     dialogs = []
     current_dialog_id = None
     current_messages = []
     
-    for line in lines[1:]:
-        parts = line.split(',')
-        if len(parts) < 3:
+    for row in rows:
+        phrase_source = row.get('phrase_source', '').strip()
+        phrase_content = row.get('phrase_content', '').strip()
+        dialog_id = row.get('dialog_id', '').strip()
+        
+        if not phrase_source or not phrase_content or not dialog_id:
             continue
-            
-        phrase_source = parts[0].strip().strip('"')
-        phrase_content = ','.join(parts[1:-2]).strip().strip('"')
-        dialog_id = parts[-2].strip().strip('"')
         
         if dialog_id != current_dialog_id:
             if current_messages:
@@ -123,6 +129,9 @@ def parse_google_sheets(url: str) -> List[Dict[str, Any]]:
             'dialog_id': current_dialog_id,
             'messages': current_messages
         })
+    
+    if not dialogs:
+        raise ValueError('Не удалось найти диалоги. Проверьте формат: нужны колонки phrase_source, phrase_content, dialog_id')
     
     return dialogs
 
