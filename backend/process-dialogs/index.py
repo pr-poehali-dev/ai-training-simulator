@@ -31,10 +31,22 @@ def handler(event: dict, context) -> dict:
         }
     
     try:
-        body = json.loads(event.get('body', '{}'))
+        raw_body = event.get('body', '{}')
+        print(f"Raw body type: {type(raw_body)}, length: {len(str(raw_body))}")
+        print(f"Raw body preview: {str(raw_body)[:200]}")
+        
+        if not raw_body or raw_body.strip() == '':
+            return {
+                'statusCode': 400,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'error': 'Пустое тело запроса'})
+            }
+        
+        body = json.loads(raw_body)
         google_sheets_url = body.get('googleSheetsUrl')
         
         if google_sheets_url:
+            print(f"Processing Google Sheets URL: {google_sheets_url}")
             dialogs = parse_google_sheets(google_sheets_url)
         else:
             return {
