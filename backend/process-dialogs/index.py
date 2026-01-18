@@ -48,6 +48,7 @@ def handler(event: dict, context) -> dict:
         google_sheets_url = body.get('googleSheetsUrl')
         file_data = body.get('file')
         file_name = body.get('fileName', 'file.xlsx')
+        system_prompt = body.get('systemPrompt', '')
         
         if google_sheets_url:
             dialogs = parse_google_sheets(google_sheets_url)
@@ -60,11 +61,14 @@ def handler(event: dict, context) -> dict:
                 'body': json.dumps({'error': 'Требуется googleSheetsUrl или file (base64)'})
             }
         
-        knowledge_base = extract_knowledge(dialogs)
-        
-        products = knowledge_base['products']
-        problems = knowledge_base['problems']
-        solutions = knowledge_base['solutions']
+        if system_prompt:
+            extracted_data = process_with_deepseek(dialogs, system_prompt)
+        else:
+            knowledge_base = extract_knowledge(dialogs)
+            extracted_data = {
+                'problems': knowledge_base['problems'][:20],
+                'products': knowledge_base['products'][:50]
+            }
         
         return {
             'statusCode': 200,
@@ -72,13 +76,8 @@ def handler(event: dict, context) -> dict:
             'body': json.dumps({
                 'success': True,
                 'dialogsCount': len(dialogs),
-                'productsFound': len(products),
-                'problemsFound': len(problems),
-                'knowledge': {
-                    'products': products[:10],
-                    'problems': problems[:10],
-                    'solutions': solutions[:10]
-                }
+                'problems': extracted_data.get('problems', []),
+                'products': extracted_data.get('products', [])
             }, ensure_ascii=False)
         }
         
@@ -211,6 +210,62 @@ def parse_google_sheets(url: str) -> List[Dict[str, Any]]:
         raise ValueError('Не удалось найти диалоги. Проверьте формат: нужны колонки phrase_source, phrase_content, dialog_id')
     
     return dialogs
+
+
+def process_with_deepseek(dialogs: List[Dict[str, Any]], system_prompt: str) -> Dict[str, List[str]]:
+    """Обрабатывает диалоги через DeepSeek API с кастомным промптом"""
+    try:
+        api_key = os.environ.get('DEEPSEEK_API_KEY')
+        if not api_key:
+            raise ValueError('DEEPSEEK_API_KEY не настроен')
+        
+        dialogs_text = '\n\n'.join([
+            f"Диалог {d['dialog_id']}:\n" + '\n'.join([
+                f"{m['source']}: {m['content']}" for m in d['messages']
+            ]) for d in dialogs[:100]
+        ])
+        
+        response = requests.post(
+            'https://api.deepseek.com/chat/completions',
+            headers={
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json'
+            },
+            json={
+                'model': 'deepseek-chat',
+                'messages': [
+                    {'role': 'system', 'content': system_prompt},
+                    {'role': 'user', 'content': f'Вот диалоги для анализа:\n\n{dialogs_text}\n\nВерни результат в JSON формате: {{"problems": ["проблема1", "проблема2", ...], "products": ["товар1", "товар2", ...]}}'}
+                ],
+                'temperature': 0.3,
+                'max_tokens': 4000
+            },
+            timeout=60
+        )
+        
+        if response.status_code != 200:
+            raise ValueError(f'DeepSeek API ошибка: {response.status_code}')
+        
+        result = response.json()
+        content = result['choices'][0]['message']['content']
+        
+        json_match = re.search(r'\{.*\}', content, re.DOTALL)
+        if json_match:
+            extracted = json.loads(json_match.group())
+            return {
+                'problems': extracted.get('problems', [])[:20],
+                'products': extracted.get('products', [])[:50]
+            }
+        
+        return {'problems': [], 'products': []}
+        
+    except Exception as e:
+        print(f'DeepSeek обработка не удалась: {str(e)}')
+        fallback = extract_knowledge(dialogs)
+        return {
+            'problems': fallback['problems'][:20],
+            'products': fallback['products'][:50]
+        }
 
 
 def extract_knowledge(dialogs: List[Dict[str, Any]]) -> Dict[str, List[str]]:

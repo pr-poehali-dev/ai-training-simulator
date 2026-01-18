@@ -13,6 +13,8 @@ const SettingsTab = () => {
   const [uploadStatus, setUploadStatus] = useState<string>('');
   const [dialogsCount, setDialogsCount] = useState<number>(0);
   const [googleSheetsUrl, setGoogleSheetsUrl] = useState<string>('');
+  const [extractedProblems, setExtractedProblems] = useState<string[]>([]);
+  const [extractedProducts, setExtractedProducts] = useState<string[]>([]);
   const [systemPrompt, setSystemPrompt] = useState<string>(
     `Проанализируй все загруженные диалоги и извлеки из них:
 
@@ -61,14 +63,16 @@ const SettingsTab = () => {
       const response = await fetch('https://functions.poehali.dev/d502ef50-1926-4db0-b56d-67f43e16998c', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ googleSheetsUrl })
+        body: JSON.stringify({ googleSheetsUrl, systemPrompt })
       });
 
       const result = await response.json();
       
       if (result.success) {
         setDialogsCount(result.dialogsCount);
-        setUploadStatus(`✓ Загружено ${result.dialogsCount} диалогов. База знаний обновлена!`);
+        setExtractedProblems(result.problems || []);
+        setExtractedProducts(result.products || []);
+        setUploadStatus(`✓ Загружено ${result.dialogsCount} диалогов. Извлечено ${result.problems?.length || 0} проблем и ${result.products?.length || 0} товаров.`);
       } else {
         setUploadStatus(`Ошибка: ${result.error}`);
       }
@@ -93,7 +97,8 @@ const SettingsTab = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           file: base64,
-          fileName: uploadedFile.name
+          fileName: uploadedFile.name,
+          systemPrompt
         })
       });
 
@@ -101,7 +106,9 @@ const SettingsTab = () => {
       
       if (result.success) {
         setDialogsCount(result.dialogsCount);
-        setUploadStatus(`✓ Загружено ${result.dialogsCount} диалогов. База знаний обновлена!`);
+        setExtractedProblems(result.problems || []);
+        setExtractedProducts(result.products || []);
+        setUploadStatus(`✓ Загружено ${result.dialogsCount} диалогов. Извлечено ${result.problems?.length || 0} проблем и ${result.products?.length || 0} товаров.`);
       } else {
         setUploadStatus(`Ошибка: ${result.error}`);
       }
@@ -257,14 +264,6 @@ const SettingsTab = () => {
               </p>
             </div>
 
-            <Button 
-              className="w-full gradient-primary"
-              disabled={!systemPrompt.trim()}
-            >
-              <Icon name="Save" size={18} className="mr-2" />
-              Сохранить промпт
-            </Button>
-
             <div className="p-3 bg-muted/30 rounded-lg">
               <div className="flex items-start gap-2">
                 <Icon name="Info" size={16} className="text-primary mt-0.5 flex-shrink-0" />
@@ -331,6 +330,106 @@ const SettingsTab = () => {
           </div>
         </Card>
       </div>
+
+      {(extractedProblems.length > 0 || extractedProducts.length > 0) && (
+        <div className="mt-6">
+          <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+            <Icon name="Database" size={24} className="text-primary" />
+            Извлечённые данные
+          </h3>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card className="glass-card p-6">
+              <h4 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                <Icon name="AlertCircle" size={20} className="text-orange-500" />
+                Типичные проблемы ({extractedProblems.length})
+              </h4>
+              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                {extractedProblems.map((problem, idx) => (
+                  <div key={idx} className="flex items-start gap-2 p-2 bg-muted/30 rounded-lg group hover:bg-muted/50 transition-colors">
+                    <span className="text-xs text-muted-foreground mt-1 flex-shrink-0">{idx + 1}.</span>
+                    <Input 
+                      defaultValue={problem}
+                      className="flex-1 bg-transparent border-none text-sm p-0 h-auto"
+                      onChange={(e) => {
+                        const updated = [...extractedProblems];
+                        updated[idx] = e.target.value;
+                        setExtractedProblems(updated);
+                      }}
+                    />
+                    <button 
+                      onClick={() => setExtractedProblems(extractedProblems.filter((_, i) => i !== idx))}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Icon name="X" size={16} className="text-destructive" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <Button 
+                onClick={() => setExtractedProblems([...extractedProblems, ''])}
+                variant="outline" 
+                className="w-full mt-3"
+              >
+                <Icon name="Plus" size={16} className="mr-2" />
+                Добавить проблему
+              </Button>
+            </Card>
+
+            <Card className="glass-card p-6">
+              <h4 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                <Icon name="Package" size={20} className="text-blue-500" />
+                Артикулы / Модели ({extractedProducts.length})
+              </h4>
+              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                {extractedProducts.map((product, idx) => (
+                  <div key={idx} className="flex items-start gap-2 p-2 bg-muted/30 rounded-lg group hover:bg-muted/50 transition-colors">
+                    <span className="text-xs text-muted-foreground mt-1 flex-shrink-0">{idx + 1}.</span>
+                    <Input 
+                      defaultValue={product}
+                      className="flex-1 bg-transparent border-none text-sm p-0 h-auto"
+                      onChange={(e) => {
+                        const updated = [...extractedProducts];
+                        updated[idx] = e.target.value;
+                        setExtractedProducts(updated);
+                      }}
+                    />
+                    <button 
+                      onClick={() => setExtractedProducts(extractedProducts.filter((_, i) => i !== idx))}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Icon name="X" size={16} className="text-destructive" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <Button 
+                onClick={() => setExtractedProducts([...extractedProducts, ''])}
+                variant="outline" 
+                className="w-full mt-3"
+              >
+                <Icon name="Plus" size={16} className="mr-2" />
+                Добавить товар
+              </Button>
+            </Card>
+          </div>
+
+          <Card className="glass-card p-4 mt-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Icon name="Save" size={20} className="text-primary" />
+                <div>
+                  <p className="font-semibold text-sm">Сохранить изменения</p>
+                  <p className="text-xs text-muted-foreground">Данные будут использованы для генерации тренировочных диалогов</p>
+                </div>
+              </div>
+              <Button className="gradient-primary">
+                <Icon name="Check" size={18} className="mr-2" />
+                Применить
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };
