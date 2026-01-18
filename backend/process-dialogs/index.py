@@ -219,11 +219,12 @@ def process_with_deepseek(dialogs: List[Dict[str, Any]], system_prompt: str) -> 
         if not api_key:
             raise ValueError('DEEPSEEK_API_KEY не настроен')
         
+        # Берем все диалоги, но ограничиваем по символам для API
         dialogs_text = '\n\n'.join([
             f"Диалог {d['dialog_id']}:\n" + '\n'.join([
-                f"{m['source']}: {m['content']}" for m in d['messages']
-            ]) for d in dialogs[:100]
-        ])
+                f"{m['source']}: {m['content'][:300]}" for m in d['messages']
+            ]) for d in dialogs
+        ])[:100000]  # Ограничение 100к символов вместо 100 диалогов
         
         response = requests.post(
             'https://api.deepseek.com/chat/completions',
@@ -238,7 +239,7 @@ def process_with_deepseek(dialogs: List[Dict[str, Any]], system_prompt: str) -> 
                     {'role': 'user', 'content': f'Вот диалоги для анализа:\n\n{dialogs_text}\n\nВерни результат в JSON формате: {{"problems": ["проблема1", "проблема2", ...], "products": ["товар1", "товар2", ...]}}'}
                 ],
                 'temperature': 0.3,
-                'max_tokens': 4000
+                'max_tokens': 8000
             },
             timeout=60
         )

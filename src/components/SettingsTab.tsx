@@ -48,6 +48,8 @@ const SettingsTab = () => {
 
     setUploadedFile(file);
     setUploadStatus(`Выбран файл: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} МБ)`);
+    setExtractedProblems([]);
+    setExtractedProducts([]);
   };
 
   const handleGoogleSheetsImport = async () => {
@@ -58,6 +60,8 @@ const SettingsTab = () => {
 
     setIsUploading(true);
     setUploadStatus('Импорт из Google Sheets...');
+    setExtractedProblems([]);
+    setExtractedProducts([]);
 
     try {
       const response = await fetch('https://functions.poehali.dev/d502ef50-1926-4db0-b56d-67f43e16998c', {
@@ -169,6 +173,15 @@ const SettingsTab = () => {
                   <div className="flex items-center gap-2 p-2 bg-primary/10 rounded-lg">
                     <Icon name="FileSpreadsheet" size={16} className="text-primary" />
                     <span className="text-sm flex-1">{uploadedFile.name}</span>
+                    <button 
+                      onClick={() => {
+                        setUploadedFile(null);
+                        setUploadStatus('');
+                      }}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <Icon name="X" size={16} />
+                    </button>
                   </div>
                 )}
                 <Button 
