@@ -63,13 +63,16 @@ const SettingsTab = () => {
     setIsUploading(true);
     setUploadStatus('Обработка файла...');
 
-    const formData = new FormData();
-    formData.append('file', uploadedFile);
-
     try {
+      const base64 = await fileToBase64(uploadedFile);
+      
       const response = await fetch('https://functions.poehali.dev/d502ef50-1926-4db0-b56d-67f43e16998c', {
         method: 'POST',
-        body: formData
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          file: base64,
+          fileName: uploadedFile.name
+        })
       });
 
       const result = await response.json();
@@ -81,10 +84,22 @@ const SettingsTab = () => {
         setUploadStatus(`Ошибка: ${result.error}`);
       }
     } catch (error) {
-      setUploadStatus('Ошибка загрузки файла');
+      setUploadStatus(`Ошибка загрузки файла: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        const base64 = (reader.result as string).split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = error => reject(error);
+    });
   };
 
   return (

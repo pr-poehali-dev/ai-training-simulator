@@ -1,8 +1,11 @@
 import json
 import os
 import re
+import base64
 from typing import Dict, List, Any
+from io import BytesIO
 import requests
+import pandas as pd
 
 def handler(event: dict, context) -> dict:
     """
@@ -32,8 +35,7 @@ def handler(event: dict, context) -> dict:
     
     try:
         raw_body = event.get('body', '{}')
-        print(f"Raw body type: {type(raw_body)}, length: {len(str(raw_body))}")
-        print(f"Raw body preview: {str(raw_body)[:200]}")
+        is_base64 = event.get('isBase64Encoded', False)
         
         if not raw_body or raw_body.strip() == '':
             return {
@@ -44,15 +46,18 @@ def handler(event: dict, context) -> dict:
         
         body = json.loads(raw_body)
         google_sheets_url = body.get('googleSheetsUrl')
+        file_data = body.get('file')
+        file_name = body.get('fileName', 'file.xlsx')
         
         if google_sheets_url:
-            print(f"Processing Google Sheets URL: {google_sheets_url}")
             dialogs = parse_google_sheets(google_sheets_url)
+        elif file_data:
+            dialogs = parse_excel_file(file_data, file_name)
         else:
             return {
                 'statusCode': 400,
                 'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-                'body': json.dumps({'error': 'Требуется googleSheetsUrl или файл'})
+                'body': json.dumps({'error': 'Требуется googleSheetsUrl или file (base64)'})
             }
         
         knowledge_base = extract_knowledge(dialogs)
@@ -83,6 +88,66 @@ def handler(event: dict, context) -> dict:
             'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
             'body': json.dumps({'error': f'Ошибка обработки: {str(e)}'})
         }
+
+
+def parse_excel_file(file_base64: str, file_name: str) -> List[Dict[str, Any]]:
+    """Парсит Excel/CSV файл из base64"""
+    try:
+        file_bytes = base64.b64decode(file_base64)
+        file_io = BytesIO(file_bytes)
+        
+        if file_name.endswith('.csv'):
+            df = pd.read_csv(file_io)
+        else:
+            df = pd.read_excel(file_io, engine='openpyxl')
+        
+        if df.empty:
+            raise ValueError('Файл пустой')
+        
+        required_columns = ['phrase_source', 'phrase_content', 'dialog_id']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            raise ValueError(f'Отсутствуют колонки: {", ".join(missing_columns)}. Найдены: {", ".join(df.columns.tolist())}')
+        
+        dialogs = []
+        current_dialog_id = None
+        current_messages = []
+        
+        for _, row in df.iterrows():
+            phrase_source = str(row['phrase_source']).strip()
+            phrase_content = str(row['phrase_content']).strip()
+            dialog_id = str(row['dialog_id']).strip()
+            
+            if phrase_source == 'nan' or phrase_content == 'nan' or dialog_id == 'nan':
+                continue
+            
+            if dialog_id != current_dialog_id:
+                if current_messages:
+                    dialogs.append({
+                        'dialog_id': current_dialog_id,
+                        'messages': current_messages
+                    })
+                current_dialog_id = dialog_id
+                current_messages = []
+            
+            current_messages.append({
+                'source': phrase_source,
+                'content': phrase_content
+            })
+        
+        if current_messages:
+            dialogs.append({
+                'dialog_id': current_dialog_id,
+                'messages': current_messages
+            })
+        
+        if not dialogs:
+            raise ValueError('Не удалось найти диалоги в файле')
+        
+        return dialogs
+        
+    except Exception as e:
+        raise ValueError(f'Ошибка чтения файла: {str(e)}')
 
 
 def parse_google_sheets(url: str) -> List[Dict[str, Any]]:
