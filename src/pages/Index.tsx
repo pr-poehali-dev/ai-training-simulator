@@ -17,10 +17,6 @@ import SettingsTab from '@/components/SettingsTab';
 const Index = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [currentScore, setCurrentScore] = useState(1247);
-  const [messages, setMessages] = useState([
-    { id: 1, sender: 'ai', text: 'Здравствуйте! Как я могу помочь вам сегодня?', time: '14:32' },
-  ]);
-  const [inputMessage, setInputMessage] = useState('');
 
   const statsData = [
     { name: 'Пн', score: 85 },
@@ -53,28 +49,6 @@ const Index = () => {
     { id: 3, date: '14 янв 2026', scenario: 'Техническая проблема', score: 95, duration: '12 мин', result: 'Отлично' },
     { id: 4, date: '13 янв 2026', scenario: 'Возврат средств', score: 78, duration: '15 мин', result: 'Средне' },
   ];
-
-  const handleSendMessage = () => {
-    if (!inputMessage.trim()) return;
-    
-    setMessages([...messages, {
-      id: messages.length + 1,
-      sender: 'user',
-      text: inputMessage,
-      time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-    }]);
-    
-    setTimeout(() => {
-      setMessages(prev => [...prev, {
-        id: prev.length + 1,
-        sender: 'ai',
-        text: 'Спасибо за ваше сообщение! Я анализирую ситуацию...',
-        time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-      }]);
-    }, 1000);
-    
-    setInputMessage('');
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
@@ -114,12 +88,7 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="trainer">
-            <TrainerTab
-              messages={messages}
-              inputMessage={inputMessage}
-              setInputMessage={setInputMessage}
-              handleSendMessage={handleSendMessage}
-            />
+            <TrainerTab />
           </TabsContent>
 
           <TabsContent value="stats" className="animate-fade-in">
