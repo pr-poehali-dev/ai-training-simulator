@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
 import Icon from '@/components/ui/icon';
 
 const SettingsTab = () => {
@@ -12,6 +13,27 @@ const SettingsTab = () => {
   const [uploadStatus, setUploadStatus] = useState<string>('');
   const [dialogsCount, setDialogsCount] = useState<number>(0);
   const [googleSheetsUrl, setGoogleSheetsUrl] = useState<string>('');
+  const [systemPrompt, setSystemPrompt] = useState<string>(
+    `Проанализируй все загруженные диалоги и извлеки из них:
+
+1. **Типичные проблемы клиентов** (20 наиболее частых вопросов и ситуаций)
+   - Например: "настройка очков", "гарантия на оправу", "подбор линз при астигматизме"
+
+2. **Артикулы и модели товаров** (все упоминавшиеся в диалогах)
+   - Например: "Ray-Ban RB2132", "Essilor Varilux", "Zeiss DriveSafe"
+
+Создай две отдельные колонки данных:
+- Колонка A: Типичные проблемы (редактируемый список)
+- Колонка B: Артикулы/модели (редактируемый список)
+
+Далее генерируй тренировочные диалоги, комбинируя темы из обеих колонок:
+- Каждый диалог должен быть уникальным
+- Смешивай проблемы клиентов с конкретными моделями товаров
+- Имитируй стиль общения из исходных 1700 диалогов
+- Длина диалога: 3-8 реплик
+
+Цель: обучить модель отвечать на вопросы про оптику естественно и с упоминанием конкретных товаров.`
+  );
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -216,39 +238,40 @@ const SettingsTab = () => {
 
         <Card className="glass-card p-6">
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Icon name="Zap" size={20} className="text-primary" />
-            AI Модель
+            <Icon name="Sparkles" size={20} className="text-primary" />
+            Системный промпт DeepSeek
           </h3>
-          <div className="space-y-3">
-            <Card className="p-3 bg-primary/10 border-primary/20">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
-                  <Icon name="Sparkles" size={20} className="text-primary" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-sm">DeepSeek API</p>
-                  <p className="text-xs text-muted-foreground">Работает без VPN из России</p>
-                </div>
-                <Badge className="gradient-primary text-white">Активно</Badge>
-              </div>
-            </Card>
-            <Card className="p-3 bg-muted/20">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-muted/50 flex items-center justify-center">
-                  <Icon name="Bot" size={20} className="text-muted-foreground" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-sm">ChatGPT (Polza)</p>
-                  <p className="text-xs text-muted-foreground">Требует прокси</p>
-                </div>
-                <Badge className="bg-muted">Резерв</Badge>
-              </div>
-            </Card>
-            <div className="p-3 bg-accent/10 rounded-lg">
-              <p className="text-xs text-muted-foreground">
-                <Icon name="Info" size={14} className="inline mr-1" />
-                AI обучается на ваших 1700 диалогах и отвечает по вашим правилам
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm text-muted-foreground mb-2 block">
+                Инструкция для модели (как обрабатывать диалоги)
+              </label>
+              <Textarea 
+                value={systemPrompt}
+                onChange={(e) => setSystemPrompt(e.target.value)}
+                className="bg-background/50 min-h-[280px] font-mono text-xs leading-relaxed"
+                placeholder="Введите инструкцию для модели..."
+              />
+              <p className="text-xs text-muted-foreground mt-2">
+                Этот промпт объясняет DeepSeek, как извлекать знания из диалогов и создавать тренировочные данные
               </p>
+            </div>
+
+            <Button 
+              className="w-full gradient-primary"
+              disabled={!systemPrompt.trim()}
+            >
+              <Icon name="Save" size={18} className="mr-2" />
+              Сохранить промпт
+            </Button>
+
+            <div className="p-3 bg-muted/30 rounded-lg">
+              <div className="flex items-start gap-2">
+                <Icon name="Info" size={16} className="text-primary mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-muted-foreground">
+                  После обработки модель создаст 2 редактируемые колонки: "Типичные проблемы" и "Артикулы/модели товаров"
+                </p>
+              </div>
             </div>
           </div>
         </Card>
