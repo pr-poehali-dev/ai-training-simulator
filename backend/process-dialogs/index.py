@@ -272,7 +272,13 @@ def extract_knowledge(dialogs: List[Dict[str, Any]]) -> Dict[str, List[str]]:
     products = set()
     problems = set()
     
-    problem_keywords = ['проблема', 'не работает', 'сломал', 'ошибка', 'помогите', 'вопрос', 'как', 'почему', 'нужно', 'хочу', 'можно', 'подскажите', 'скажите']
+    problem_keywords = [
+        'не работает', 'не видим', 'не получается', 'не хватает', 'не могу',
+        'сломан', 'сломал', 'сломался', 'разбит', 'разбился',
+        'мутное', 'пятно', 'царапина', 'трещина',
+        'проблема', 'дефект', 'брак',
+        'как будто', 'почему', 'что делать'
+    ]
     
     product_keywords = ['микроскоп', 'телескоп', 'бинокль', 'прицел', 'лупа', 'окуляр', 'объектив']
     
@@ -283,15 +289,15 @@ def extract_knowledge(dialogs: List[Dict[str, Any]]) -> Dict[str, List[str]]:
             
             # Извлекаем проблемы клиентов
             if msg['source'] == 'Клиент':
-                # Берём полные вопросы клиентов
-                sentences = [s.strip() for s in content.split('?') if s.strip()]
+                # Разбиваем на предложения по точке и вопросу
+                sentences = content.replace('?', '.').split('.')
                 for sentence in sentences:
+                    sentence = sentence.strip()
                     if any(word in sentence.lower() for word in problem_keywords):
-                        problem = sentence + '?'
-                        if len(problem) > 200:
-                            problem = problem[:200] + '...'
-                        if len(problem) > 15:
-                            problems.add(problem)
+                        if len(sentence) > 200:
+                            sentence = sentence[:200] + '...'
+                        if len(sentence) > 10:
+                            problems.add(sentence)
             
             # Извлекаем названия товаров
             if any(keyword in content_lower for keyword in product_keywords):
