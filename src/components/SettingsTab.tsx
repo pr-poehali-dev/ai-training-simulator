@@ -45,8 +45,6 @@ const SettingsTab = () => {
 
     setUploadedFile(file);
     setUploadStatus(`Выбран файл: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} МБ)`);
-    setExtractedProblems([]);
-    setExtractedProducts([]);
   };
 
   const handleGoogleSheetsImport = async () => {
@@ -57,8 +55,6 @@ const SettingsTab = () => {
 
     setIsUploading(true);
     setUploadStatus('Импорт из Google Sheets...');
-    setExtractedProblems([]);
-    setExtractedProducts([]);
 
     try {
       const response = await fetch('https://functions.poehali.dev/d502ef50-1926-4db0-b56d-67f43e16998c', {
@@ -70,10 +66,13 @@ const SettingsTab = () => {
       const result = await response.json();
       
       if (result.success) {
-        setDialogsCount(result.dialogsCount);
-        setExtractedProblems(result.problems || []);
-        setExtractedProducts(result.products || []);
-        setUploadStatus(`✓ Загружено ${result.dialogsCount} диалогов. Извлечено ${result.problems?.length || 0} проблем и ${result.products?.length || 0} товаров.`);
+        setDialogsCount(prev => prev + result.dialogsCount);
+        setExtractedProblems(prev => [...new Set([...prev, ...(result.problems || [])])]);
+        setExtractedProducts(prev => [...new Set([...prev, ...(result.products || [])])]);
+        const newTotal = dialogsCount + result.dialogsCount;
+        const newProblemsCount = extractedProblems.length + (result.problems?.length || 0);
+        const newProductsCount = extractedProducts.length + (result.products?.length || 0);
+        setUploadStatus(`✓ Добавлено ${result.dialogsCount} диалогов. Всего: ${newTotal} диалогов, ${newProblemsCount} проблем, ${newProductsCount} товаров.`);
       } else {
         setUploadStatus(`Ошибка: ${result.error}`);
       }
@@ -106,10 +105,13 @@ const SettingsTab = () => {
       const result = await response.json();
       
       if (result.success) {
-        setDialogsCount(result.dialogsCount);
-        setExtractedProblems(result.problems || []);
-        setExtractedProducts(result.products || []);
-        setUploadStatus(`✓ Загружено ${result.dialogsCount} диалогов. Извлечено ${result.problems?.length || 0} проблем и ${result.products?.length || 0} товаров.`);
+        setDialogsCount(prev => prev + result.dialogsCount);
+        setExtractedProblems(prev => [...new Set([...prev, ...(result.problems || [])])]);
+        setExtractedProducts(prev => [...new Set([...prev, ...(result.products || [])])]);
+        const newTotal = dialogsCount + result.dialogsCount;
+        const newProblemsCount = extractedProblems.length + (result.problems?.length || 0);
+        const newProductsCount = extractedProducts.length + (result.products?.length || 0);
+        setUploadStatus(`✓ Добавлено ${result.dialogsCount} диалогов. Всего: ${newTotal} диалогов, ${newProblemsCount} проблем, ${newProductsCount} товаров.`);
       } else {
         setUploadStatus(`Ошибка: ${result.error}`);
       }
