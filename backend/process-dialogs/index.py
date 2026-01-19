@@ -272,22 +272,28 @@ def process_with_deepseek(dialogs: List[Dict[str, Any]], system_prompt: str) -> 
         result = response.json()
         content = result['choices'][0]['message']['content']
         
+        print(f'DeepSeek ответ (первые 500 символов): {content[:500]}')
+        
         json_match = re.search(r'\{.*\}', content, re.DOTALL)
         if json_match:
             extracted = json.loads(json_match.group())
+            problems = extracted.get('problems', [])[:30]
+            products = extracted.get('products', [])[:100]
+            print(f'Извлечено проблем: {len(problems)}, товаров: {len(products)}')
             return {
-                'problems': extracted.get('problems', [])[:20],
-                'products': extracted.get('products', [])[:50]
+                'problems': problems,
+                'products': products
             }
         
-        return {'problems': [], 'products': []}
+        print('DeepSeek не вернул JSON, используем fallback')
+        raise ValueError('Нет JSON в ответе')
         
     except Exception as e:
         print(f'DeepSeek обработка не удалась: {str(e)}')
         fallback = extract_knowledge(dialogs)
         return {
-            'problems': fallback['problems'][:20],
-            'products': fallback['products'][:50]
+            'problems': fallback['problems'][:30],
+            'products': fallback['products'][:100]
         }
 
 
