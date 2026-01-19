@@ -61,14 +61,12 @@ def handler(event: dict, context) -> dict:
                 'body': json.dumps({'error': 'Требуется googleSheetsUrl или file (base64)'})
             }
         
-        if system_prompt:
-            extracted_data = process_with_deepseek(dialogs, system_prompt)
-        else:
-            knowledge_base = extract_knowledge(dialogs)
-            extracted_data = {
-                'problems': knowledge_base['problems'][:20],
-                'products': knowledge_base['products'][:50]
-            }
+        # Быстрая локальная обработка без DeepSeek
+        knowledge_base = extract_knowledge(dialogs)
+        extracted_data = {
+            'problems': knowledge_base['problems'][:30],
+            'products': knowledge_base['products'][:100]
+        }
         
         return {
             'statusCode': 200,
@@ -270,52 +268,37 @@ def process_with_deepseek(dialogs: List[Dict[str, Any]], system_prompt: str) -> 
 
 
 def extract_knowledge(dialogs: List[Dict[str, Any]]) -> Dict[str, List[str]]:
-    """Извлекает знания из диалогов"""
+    """Быстрое извлечение проблем клиентов и товаров из диалогов"""
     products = set()
     problems = set()
-    solutions = []
     
-    optical_keywords = [
-        'прицел', 'оптика', 'микроскоп', 'бинокль', 'монокуляр',
-        'телескоп', 'сетка', 'кратность', 'объектив', 'линза',
-        'диоптрия', 'фокус', 'параллакс', 'MOA', 'настройка',
-        'пристрелка', 'вынос', 'щелчок'
-    ]
+    problem_keywords = ['проблема', 'не работает', 'сломал', 'ошибка', 'помогите', 'вопрос', 'как', 'почему', 'нужно', 'хочу', 'можно']
     
     for dialog in dialogs:
-        messages = dialog['messages']
-        
-        for msg in messages:
-            content = msg['content'].lower()
+        for msg in dialog['messages']:
+            content = msg['content']
+            content_lower = content.lower()
             
-            for keyword in optical_keywords:
-                if keyword in content:
-                    words = content.split()
-                    for i, word in enumerate(words):
-                        if keyword in word and i > 0:
-                            potential_product = ' '.join(words[max(0, i-2):min(len(words), i+3)])
-                            if len(potential_product) > 10:
-                                products.add(potential_product[:100])
+            # Извлекаем проблемы клиентов (из сообщений клиента)
+            if msg['source'] == 'client' and any(word in content_lower for word in problem_keywords):
+                problem = content.split('.')[0].strip()
+                if len(problem) > 150:
+                    problem = problem[:150] + '...'
+                if problem and len(problem) > 10:
+                    problems.add(problem)
             
-            if msg['source'] == 'Клиент':
-                if any(word in content for word in ['как', 'почему', 'не работает', 'проблема', 'помогите']):
-                    problems.add(msg['content'][:200])
-            
-            if msg['source'] == 'Наш сотрудник':
-                client_msg = None
-                for m in messages:
-                    if m['source'] == 'Клиент':
-                        client_msg = m
-                        break
-                
-                if client_msg:
-                    solutions.append({
-                        'problem': client_msg['content'][:200],
-                        'solution': msg['content'][:300]
-                    })
+            # Извлекаем артикулы и модели товаров
+            product_patterns = [
+                r'[A-Z][a-zA-Z]+-[A-Z0-9-]+',
+                r'модель\s+[А-Яа-я0-9\s-]+',
+                r'артикул\s+[А-Яа-я0-9\s-]+',
+                r'[А-ЯA-Z][а-яa-z]+\s+[A-Z0-9-]{3,}',
+            ]
+            for pattern in product_patterns:
+                matches = re.findall(pattern, content)
+                products.update([m.strip() for m in matches if len(m.strip()) > 3])
     
     return {
-        'products': list(products),
-        'problems': list(problems),
-        'solutions': solutions
+        'products': sorted(list(products)),
+        'problems': sorted(list(problems))
     }
