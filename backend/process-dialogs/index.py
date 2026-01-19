@@ -272,31 +272,43 @@ def extract_knowledge(dialogs: List[Dict[str, Any]]) -> Dict[str, List[str]]:
     products = set()
     problems = set()
     
-    problem_keywords = ['проблема', 'не работает', 'сломал', 'ошибка', 'помогите', 'вопрос', 'как', 'почему', 'нужно', 'хочу', 'можно']
+    problem_keywords = ['проблема', 'не работает', 'сломал', 'ошибка', 'помогите', 'вопрос', 'как', 'почему', 'нужно', 'хочу', 'можно', 'подскажите', 'скажите']
+    
+    product_keywords = ['микроскоп', 'телескоп', 'бинокль', 'прицел', 'лупа', 'окуляр', 'объектив']
     
     for dialog in dialogs:
         for msg in dialog['messages']:
             content = msg['content']
             content_lower = content.lower()
             
-            # Извлекаем проблемы клиентов (из сообщений клиента)
-            if msg['source'] == 'client' and any(word in content_lower for word in problem_keywords):
-                problem = content.split('.')[0].strip()
-                if len(problem) > 150:
-                    problem = problem[:150] + '...'
-                if problem and len(problem) > 10:
-                    problems.add(problem)
+            # Извлекаем проблемы клиентов
+            if msg['source'] == 'Клиент':
+                # Берём полные вопросы клиентов
+                sentences = [s.strip() for s in content.split('?') if s.strip()]
+                for sentence in sentences:
+                    if any(word in sentence.lower() for word in problem_keywords):
+                        problem = sentence + '?'
+                        if len(problem) > 200:
+                            problem = problem[:200] + '...'
+                        if len(problem) > 15:
+                            problems.add(problem)
             
-            # Извлекаем артикулы и модели товаров
-            product_patterns = [
-                r'[A-Z][a-zA-Z]+-[A-Z0-9-]+',
-                r'модель\s+[А-Яа-я0-9\s-]+',
-                r'артикул\s+[А-Яа-я0-9\s-]+',
-                r'[А-ЯA-Z][а-яa-z]+\s+[A-Z0-9-]{3,}',
-            ]
-            for pattern in product_patterns:
-                matches = re.findall(pattern, content)
-                products.update([m.strip() for m in matches if len(m.strip()) > 3])
+            # Извлекаем названия товаров
+            if any(keyword in content_lower for keyword in product_keywords):
+                # Ищем паттерны: "слово цифры" или "слово слово цифры"
+                product_patterns = [
+                    r'[А-Яа-яA-Za-z]+\s+\d+[хx]?\d*',
+                    r'[А-Яа-я]+\s+[А-Яа-я]+\s+\d+',
+                    r'[А-Яа-я]+\s+[рРpP]\d+',
+                    r'детский\s+[А-Яа-я]+',
+                    r'[А-Яа-я]+-\d+',
+                ]
+                for pattern in product_patterns:
+                    matches = re.findall(pattern, content, re.IGNORECASE)
+                    for match in matches:
+                        cleaned = match.strip()
+                        if len(cleaned) > 4 and not cleaned.lower().startswith(('как ', 'что ', 'где ')):
+                            products.add(cleaned)
     
     return {
         'products': sorted(list(products)),
