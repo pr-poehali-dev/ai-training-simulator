@@ -61,12 +61,16 @@ def handler(event: dict, context) -> dict:
                 'body': json.dumps({'error': 'Требуется googleSheetsUrl или file (base64)'})
             }
         
-        # Быстрая локальная обработка без DeepSeek
-        knowledge_base = extract_knowledge(dialogs)
-        extracted_data = {
-            'problems': knowledge_base['problems'][:30],
-            'products': knowledge_base['products'][:100]
-        }
+        # Обработка через DeepSeek API (полноценный анализ)
+        try:
+            extracted_data = process_with_deepseek(dialogs, system_prompt)
+        except Exception as e:
+            print(f'DeepSeek недоступен, используем fallback парсер: {str(e)}')
+            knowledge_base = extract_knowledge(dialogs)
+            extracted_data = {
+                'problems': knowledge_base['problems'][:30],
+                'products': knowledge_base['products'][:100]
+            }
         
         return {
             'statusCode': 200,
@@ -224,6 +228,27 @@ def process_with_deepseek(dialogs: List[Dict[str, Any]], system_prompt: str) -> 
             ]) for d in dialogs
         ])[:100000]  # Ограничение 100к символов для API
         
+        analysis_prompt = f"""Проанализируй ВСЕ диалоги магазина оптики и извлеки ТОЛЬКО реальные проблемы клиентов.
+
+ВАЖНО — НЕ извлекай:
+- Общие фразы: "Все проблема решена", "Вся проблема описана выше", "В чем может быть проблема"
+- Вопросы сотрудников: "А почему Вы спрашиваете"
+- Неполные фразы без контекста
+- Обрывки предложений
+
+ИЗВЛЕКАЙ ТОЛЬКО:
+- Конкретные проблемы: "микроскоп не фокусируется", "ничего не видно в окуляр", "телескоп показывает мутную картинку"
+- Дефекты товаров: "сломан объектив", "треснуло стекло", "не работает подсветка"
+- Реальные жалобы клиентов с конкретикой
+
+Названия товаров (все модели): эврика 1280, атом 800х, детский микроскоп, микромед р1, первооткрыватель и т.д.
+
+Верни JSON:
+{{"problems": ["конкретная проблема 1", "конкретная проблема 2", ...], "products": ["товар1", "товар2", ...]}}
+
+Диалоги:
+{dialogs_text}"""
+
         response = requests.post(
             'https://api.deepseek.com/chat/completions',
             headers={
@@ -233,13 +258,12 @@ def process_with_deepseek(dialogs: List[Dict[str, Any]], system_prompt: str) -> 
             json={
                 'model': 'deepseek-chat',
                 'messages': [
-                    {'role': 'system', 'content': system_prompt},
-                    {'role': 'user', 'content': f'Вот диалоги для анализа:\n\n{dialogs_text}\n\nВерни результат в JSON формате: {{"problems": ["проблема1", "проблема2", ...], "products": ["товар1", "товар2", ...]}}'}
+                    {'role': 'user', 'content': analysis_prompt}
                 ],
-                'temperature': 0.3,
-                'max_tokens': 8000
+                'temperature': 0.2,
+                'max_tokens': 10000
             },
-            timeout=60
+            timeout=120
         )
         
         if response.status_code != 200:
